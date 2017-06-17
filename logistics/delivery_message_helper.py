@@ -2,7 +2,7 @@
 
 import logging
 from config import USERNAME, PASSWORD
-from message.message_helper import get_token, send_message
+from message.sms_client import get_token, send_message
 
 logger = logging.getLogger(__name__)
 TOKEN = ""
