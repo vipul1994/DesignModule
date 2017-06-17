@@ -7,6 +7,7 @@ from custom_exceptions import BadInputError, \
     SmsException
 import datetime
 import requests
+import time
 from requests import ConnectTimeout
 
 
@@ -99,8 +100,27 @@ class SmsClient(object):
             raise SmsException(response.error_message)
 
 
+class SmsClientWithRetry(SmsClient):
 
+    def __init__(self, login_url, message_url, username, password):
+        super(SmsClient, self).__init__(login_url, message_url, username, password)
+        self.num_attempts = 3
+        self.backoff = 2
 
+    def send_sms(self, phone_number, message):
+        # TODO - add retry logic
+        attempts = 1
+        retries = self.num_attempts
+        delay = self.backoff
+        while retries > 1:
+            try:
+                return super(SmsClientWithRetry, self).send_sms(phone_number, message)
+            except SmsException as e:
+                time.sleep(delay)
+                attempts += 1
+                retries -= 1
+                delay *= self.backoff
 
+        return super(SmsClientWithRetry, self).send_sms(phone_number, message)
 
-sms_client = SmsClient(LOGIN_API, MESSAGE_API, USERNAME, PASSWORD)
+sms_client = SmsClientWithRetry(LOGIN_API, MESSAGE_API, USERNAME, PASSWORD)
