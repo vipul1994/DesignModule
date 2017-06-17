@@ -1,6 +1,8 @@
 # Author Vipul Jain
+from random import randint
 
-from config import LOGIN_API, MESSAGE_API, USERNAME, PASSWORD
+from config import LOGIN_API, MESSAGE_API, USERNAME, PASSWORD, \
+    MILIO_MESSAGE_API, REGISTERED_PHONE
 from custom_exceptions import BadInputError, \
     InvalidMessageError, \
     InvalidPhoneNumberError, \
@@ -11,7 +13,7 @@ import time
 from requests import ConnectTimeout
 
 
-class SmsClient(object):
+class WatertelSmsClient(object):
 
     def __init__(self, login_url, message_url, username, password):
         self.login_url = login_url
@@ -47,7 +49,6 @@ class SmsClient(object):
             return r.status_code, r.json()
         except Exception as e:
             raise Exception("could not connect to login server on watertel")
-
 
     def _make_message_request(self, access_token, phone_number, message):
         try:
@@ -100,12 +101,10 @@ class SmsClient(object):
             raise SmsException(response.error_message)
 
 
-class SmsClientWithRetry(SmsClient):
+class SmsClientWithRetry(object):
 
-    def __init__(self, login_url, message_url, username, password):
-        super(SmsClient, self).__init__(login_url, message_url, username, password)
-        self.num_attempts = 3
-        self.backoff = 2
+    def __init__(self, sms_client):
+        self.delegate = sms_client
 
     def send_sms(self, phone_number, message):
         # TODO - add retry logic
@@ -114,13 +113,43 @@ class SmsClientWithRetry(SmsClient):
         delay = self.backoff
         while retries > 1:
             try:
-                return super(SmsClientWithRetry, self).send_sms(phone_number, message)
+                return self.delegate.send_sms(phone_number, message)
             except SmsException as e:
                 time.sleep(delay)
                 attempts += 1
                 retries -= 1
                 delay *= self.backoff
+        return self.delegate.send_sms(phone_number, message)
 
-        return super(SmsClientWithRetry, self).send_sms(phone_number, message)
 
-sms_client = SmsClientWithRetry(LOGIN_API, MESSAGE_API, USERNAME, PASSWORD)
+class MilioSmsClient(object):
+
+    def __init__(self, url, registered_phone, access_token):
+        self.url = url
+        self.registered_phone = registered_phone
+        self.access_token = access_token
+
+    def send_sms(self, phone_number, message):
+        pass
+
+
+class SmsRouter:
+
+    def __init__(self, split_ratio, first, second):
+        self.split_ratio = split_ratio
+        self. watertel = first
+        self.milio = second
+
+    def send_sms(self, phone_number, message):
+        number = randint(1, 100)
+        if number <= self.split_ratio:
+            self.first.send_sms(phone_number, message)
+        elif number <= 100:
+            self.second.send_sms(phone_number, message)
+        else:
+            raise SmsException("Unreachable code path!")
+
+_watertel_client = WatertelSmsClient(LOGIN_API, MESSAGE_API, USERNAME, PASSWORD)
+_milio_client = MilioSmsClient(MILIO_MESSAGE_API, REGISTERED_PHONE, PASSWORD)
+_router = SmsRouter(80, _watertel_client, _milio_client)
+sms_client = SmsClientWithRetry(_router)
